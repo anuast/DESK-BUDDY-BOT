@@ -1,10 +1,18 @@
 import cv2
+import sys
 import time
 import subprocess
 import os
 import threading
 import urllib.request
 from collections import deque
+
+from play_audio import play_audio
+
+# cv2.imshow() requires the main thread on macOS — calling it from a
+# background thread raises an "Unknown C++ exception from OpenCV".
+# On Windows it works from any thread, so we keep the live preview there.
+SHOW_PREVIEW = sys.platform == "win32"
 
 import mediapipe as mp
 from mediapipe.tasks.python import BaseOptions
@@ -192,7 +200,10 @@ def start_vision_sensor():
         baseline_gaze = 0.5
         print("⚠️ [Vision Sensor]: Couldn't see a face during calibration — using default thresholds.")
 
-    print("\n👁️ [Vision Sensor]: High-FPS Threaded Real-Time Stream Deployed Natively...")
+    if SHOW_PREVIEW:
+        print("\n👁️ [Vision Sensor]: High-FPS Threaded Real-Time Stream Deployed Natively... (press Q in preview window to quit)")
+    else:
+        print("\n👁️ [Vision Sensor]: High-FPS Threaded Real-Time Stream Deployed Natively... (headless mode on macOS)")
 
     distraction_timer = None
     is_triggered = False
@@ -227,7 +238,10 @@ def start_vision_sensor():
                     xs = [p.x * w for p in lm]
                     ys = [p.y * h for p in lm]
                     fx, fy, fx2, fy2 = int(min(xs)), int(min(ys)), int(max(xs)), int(max(ys))
-                    cv2.rectangle(frame, (fx, fy), (fx2, fy2), (0, 255, 0), 2)
+
+                    # Draw bounding box — Windows only (imshow not safe from thread on macOS)
+                    if SHOW_PREVIEW:
+                        cv2.rectangle(frame, (fx, fy), (fx2, fy2), (0, 255, 0), 2)
 
                     nose_x = lm[NOSE_TIP].x * w
                     l_gaze = _eye_gaze_ratio(lm, LEFT_EYE_CORNERS, LEFT_IRIS_CENTER, w)
@@ -267,36 +281,35 @@ def start_vision_sensor():
                         distraction_timer = time.time()
                     elif (time.time() - distraction_timer) > 4 and not is_triggered:
                         print("\n🚨 [Vision Sensor]: Look-away threshold breached!")
-                        executable = "./worker.exe" if os.name == 'nt' else "./worker"
-                        subprocess.run([executable, "yell_procrastination.mp3"])
+                        play_audio("yell_procrastination.mp3")
                         is_triggered = True
                 elif absent_votes / total > 0.7:
                     if distraction_timer is None:
                         distraction_timer = time.time()
                     elif (time.time() - distraction_timer) > 4 and not is_triggered:
                         print("\n🚨 [Vision Sensor]: User missing from workspace space matrix!")
-                        executable = "./worker.exe" if os.name == 'nt' else "./worker"
-                        subprocess.run([executable, "yell_procrastination.mp3"])
+                        play_audio("yell_procrastination.mp3")
                         is_triggered = True
                 else:
                     distraction_timer = None
                     is_triggered = False
 
-            color = (0, 255, 0) if gaze_status == "Focused" else (0, 0, 255)
-            cv2.putText(frame, f"Gaze Status: {gaze_status}", (15, 30),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
-
-            cv2.imshow('Desk Buddy - Universal Vision Sensor Node', frame)
-
-            if cv2.waitKey(1) & 0xFF == ord('q'):
-                break
+            # Live preview window — Windows only (macOS requires GUI on main thread)
+            if SHOW_PREVIEW:
+                color = (0, 255, 0) if gaze_status == "Focused" else (0, 0, 255)
+                cv2.putText(frame, f"Gaze Status: {gaze_status}", (15, 30),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+                cv2.imshow('Desk Buddy - Universal Vision Sensor Node', frame)
+                if cv2.waitKey(1) & 0xFF == ord('q'):
+                    break
 
     except KeyboardInterrupt:
         print("\n👁️ Vision analysis halted safely.")
     finally:
         vs.stop()
         landmarker.close()
-        cv2.destroyAllWindows()
+        if SHOW_PREVIEW:
+            cv2.destroyAllWindows()
 
 
 if __name__ == "__main__":

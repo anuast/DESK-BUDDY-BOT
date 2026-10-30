@@ -1,6 +1,5 @@
 import speech_recognition as sr
-import subprocess
-import os
+from play_audio import play_audio
 
 def listen_to_user():
     # 1. Initialize the microphone and recognition framework
@@ -44,12 +43,8 @@ def listen_to_user():
                 print(" Intent: Unrecognized General Query.")
                 selected_audio = "generic_response.mp3"
 
-            # 3. Trigger C++ Multimedia Layer
-            executable = "./worker.exe" if os.name == 'nt' else "./worker"
-            if os.path.exists(selected_audio):
-                subprocess.run([executable, selected_audio])
-            else:
-                print(f" Asset Error: Missing file '{selected_audio}'")
+            # 3. Trigger audio playback via cross-platform helper
+            play_audio(selected_audio)
                 
             print("-" * 50)
 

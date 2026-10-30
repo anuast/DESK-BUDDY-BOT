@@ -1,0 +1,7 @@
+opencv-python
+mediapipe
+pygetwindow
+pyobjc-framework-Quartz  # required by pygetwindow on macOS
+SpeechRecognition
+pyaudio
+pydub
