@@ -1,3 +1,5 @@
 __pycache__/
 *.pyc
 face_landmarker.task
+venv
+*.exe
